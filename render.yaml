@@ -1,0 +1,19 @@
+# Render Blueprint — deploy backend free.
+# Push this repo, then in Render: New > Blueprint, point at this repo.
+services:
+  - type: web
+    name: family-tree-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DATABASE_URL
+        sync: false        # paste your Supabase/Neon JDBC URL in dashboard
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true   # Render generates a secure random value
