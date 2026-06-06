@@ -5,9 +5,8 @@ services:
     name: family-tree-backend
     runtime: docker
     plan: free
-    rootDir : backend
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: .
+    dockerContext: ./backend
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
