@@ -11,4 +11,9 @@ public interface PersonRepository extends JpaRepository<Person, Long> {
 
     @Query("SELECT p FROM Person p WHERE p.father.id = :parentId OR p.mother.id = :parentId")
     List<Person> findChildren(Long parentId);
+
+    @Query("SELECT p FROM Person p WHERE " +
+           "LOWER(p.firstName) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "LOWER(p.lastName) LIKE LOWER(CONCAT('%', :q, '%'))")
+    List<Person> searchByName(String q);
 }

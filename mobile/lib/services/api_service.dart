@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/person.dart';
+import '../models/relationship.dart';
 
 class ApiService {
   // IMPORTANT:
@@ -8,7 +9,7 @@ class ApiService {
   //  - iOS simulator / web: use http://localhost:8080
   //  - Physical device: use your computer's LAN IP, e.g. http://192.168.1.20:8080
   //  - Deployed backend: use your Render/Railway URL, e.g. https://family-tree.onrender.com
-  static const String baseUrl = 'http://10.0.2.2:8080/api';
+  static const String baseUrl = 'https://family-tree-backend-3g9h.onrender.com/api';
 
   // Set after login/register; attached to every authenticated request.
   static String? authToken;
@@ -73,6 +74,49 @@ class ApiService {
     final res = await http.delete(Uri.parse('$baseUrl/persons/$id'), headers: _headers);
     if (res.statusCode != 204 && res.statusCode != 200) {
       throw Exception('Failed to delete person');
+    }
+  }
+
+  // ---- Relationships ----
+
+  Future<List<Relationship>> getRelationships() async {
+    final res =
+        await http.get(Uri.parse('$baseUrl/relationships'), headers: _headers);
+    if (res.statusCode == 200) {
+      final List data = jsonDecode(res.body);
+      return data.map((e) => Relationship.fromJson(e)).toList();
+    }
+    throw Exception('Failed to load relationships');
+  }
+
+  Future<List<Relationship>> getRelationshipsForPerson(int personId) async {
+    final res = await http.get(
+        Uri.parse('$baseUrl/relationships/person/$personId'),
+        headers: _headers);
+    if (res.statusCode == 200) {
+      final List data = jsonDecode(res.body);
+      return data.map((e) => Relationship.fromJson(e)).toList();
+    }
+    throw Exception('Failed to load relationships');
+  }
+
+  Future<Relationship> createRelationship(Relationship r) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/relationships'),
+      headers: _headers,
+      body: jsonEncode(r.toJson()),
+    );
+    if (res.statusCode == 201 || res.statusCode == 200) {
+      return Relationship.fromJson(jsonDecode(res.body));
+    }
+    throw Exception('Failed to create relationship: ${res.body}');
+  }
+
+  Future<void> deleteRelationship(int id) async {
+    final res =
+        await http.delete(Uri.parse('$baseUrl/relationships/$id'), headers: _headers);
+    if (res.statusCode != 204 && res.statusCode != 200) {
+      throw Exception('Failed to delete relationship');
     }
   }
 }

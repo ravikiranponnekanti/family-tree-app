@@ -29,6 +29,7 @@ public class SecurityConfig {
                 .cors(c -> {}) // uses WebConfig CORS mapping
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/health").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .anyRequest().authenticated()
                 )

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../theme/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoggedIn;
@@ -15,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   bool _isRegister = false;
   bool _busy = false;
+  bool _obscure = true;
   String? _error;
 
   @override
@@ -50,59 +52,124 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.account_tree,
-                  size: 64, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 16),
-              Text(_isRegister ? 'Create account' : 'Welcome back',
-                  style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _username,
-                decoration: const InputDecoration(
-                    labelText: 'Username', border: OutlineInputBorder()),
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppTheme.heroGradient),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.account_tree,
+                        size: 56, color: Colors.white),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Family Tree',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Text(
+                    _isRegister
+                        ? 'Create your account'
+                        : 'Welcome back',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 15),
+                  ),
+                  const SizedBox(height: 28),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _username,
+                            decoration: const InputDecoration(
+                              labelText: 'Username',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          TextField(
+                            controller: _password,
+                            obscureText: _obscure,
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscure
+                                    ? Icons.visibility_off
+                                    : Icons.visibility),
+                                onPressed: () =>
+                                    setState(() => _obscure = !_obscure),
+                              ),
+                            ),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(_error!,
+                                  style:
+                                      TextStyle(color: Colors.red.shade700)),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: _busy ? null : _submit,
+                              child: _busy
+                                  ? const SizedBox(
+                                      height: 22,
+                                      width: 22,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white))
+                                  : Text(
+                                      _isRegister ? 'Register' : 'Log in'),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => setState(() {
+                                      _isRegister = !_isRegister;
+                                      _error = null;
+                                    }),
+                            child: Text(_isRegister
+                                ? 'Have an account? Log in'
+                                : 'New here? Create an account'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'First login may take ~50s while the server wakes up.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 12),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(
-                    labelText: 'Password', border: OutlineInputBorder()),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _busy ? null : _submit,
-                  child: _busy
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_isRegister ? 'Register' : 'Login'),
-                ),
-              ),
-              TextButton(
-                onPressed: _busy
-                    ? null
-                    : () => setState(() {
-                          _isRegister = !_isRegister;
-                          _error = null;
-                        }),
-                child: Text(_isRegister
-                    ? 'Have an account? Log in'
-                    : 'New here? Create an account'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
