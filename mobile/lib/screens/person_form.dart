@@ -246,7 +246,7 @@ class _PersonFormState extends State<PersonForm> {
       children: [
         CircleAvatar(
           radius: 56,
-          backgroundColor: AppTheme.neutralTint,
+          backgroundColor: AppTheme.surfaceHi,
           backgroundImage: _pickedImage != null
               ? FileImage(_pickedImage!)
               : (_photoUrl != null ? NetworkImage(_photoUrl!) : null)

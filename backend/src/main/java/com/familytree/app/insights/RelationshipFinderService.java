@@ -3,6 +3,8 @@ package com.familytree.app.insights;
 import com.familytree.app.common.NotFoundException;
 import com.familytree.app.person.Person;
 import com.familytree.app.person.PersonRepository;
+import com.familytree.app.relationship.Relationship;
+import com.familytree.app.relationship.RelationshipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,132 +12,204 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 
 /**
- * Computes how two people are related by walking parent links.
- * Strategy: build each person's ancestor map (ancestor id -> distance up the tree),
- * find the closest common ancestor, then translate the two distances into a label
- * (parent, sibling, cousin, aunt/uncle, etc.).
+ * Finds how two people are connected by walking PARENT, CHILD, and SPOUSE edges.
+ * Uses BFS to find the shortest connection path, then derives a human label
+ * (including in-laws and step-relations) from the sequence of edges.
  */
 @Service
 @RequiredArgsConstructor
 public class RelationshipFinderService {
 
-    private final PersonRepository repository;
+    private final PersonRepository personRepository;
+    private final RelationshipRepository relationshipRepository;
 
-    public record RelationshipResult(String label, String detail) {}
+    public record RelationshipResult(String label, String detail, List<String> path) {}
+
+    private enum Edge { FATHER, MOTHER, CHILD, SPOUSE }
+
+    private record Step(Long personId, Edge viaEdge) {}
 
     @Transactional(readOnly = true)
     public RelationshipResult findRelationship(Long fromId, Long toId) {
-        Person from = repository.findById(fromId)
+        Person from = personRepository.findById(fromId)
                 .orElseThrow(() -> new NotFoundException("Person not found: " + fromId));
-        Person to = repository.findById(toId)
+        Person to = personRepository.findById(toId)
                 .orElseThrow(() -> new NotFoundException("Person not found: " + toId));
 
         if (fromId.equals(toId)) {
-            return new RelationshipResult("Same person", "That's the same person.");
+            return new RelationshipResult("Same person", "That's the same person.", List.of());
         }
 
-        // Direct descendant/ancestor checks first
-        Map<Long, Integer> fromAnc = ancestors(from);
-        Map<Long, Integer> toAnc = ancestors(to);
+        Map<Long, Person> byId = new HashMap<>();
+        for (Person p : personRepository.findAll()) byId.put(p.getId(), p);
 
-        // Is 'to' an ancestor of 'from'?
-        if (fromAnc.containsKey(toId)) {
-            int d = fromAnc.get(toId);
-            return new RelationshipResult(ancestorLabel(d, to.getGender()),
-                    descLine(from, to, d, 0));
-        }
-        // Is 'from' an ancestor of 'to'?
-        if (toAnc.containsKey(fromId)) {
-            int d = toAnc.get(fromId);
-            return new RelationshipResult(descendantLabel(d, to.getGender()),
-                    descLine(from, to, 0, d));
+        // spouse adjacency
+        Map<Long, Set<Long>> spouses = new HashMap<>();
+        for (Relationship r : relationshipRepository.findAll()) {
+            spouses.computeIfAbsent(r.getPersonAId(), k -> new HashSet<>()).add(r.getPersonBId());
+            spouses.computeIfAbsent(r.getPersonBId(), k -> new HashSet<>()).add(r.getPersonAId());
         }
 
-        // Find lowest common ancestor with smallest combined distance
-        Long bestAncestor = null;
-        int bestFrom = Integer.MAX_VALUE, bestTo = Integer.MAX_VALUE;
-        int bestSum = Integer.MAX_VALUE;
-        for (var e : fromAnc.entrySet()) {
-            if (toAnc.containsKey(e.getKey())) {
-                int sum = e.getValue() + toAnc.get(e.getKey());
-                if (sum < bestSum) {
-                    bestSum = sum;
-                    bestAncestor = e.getKey();
-                    bestFrom = e.getValue();
-                    bestTo = toAnc.get(e.getKey());
-                }
+        // BFS storing the edge taken to reach each node
+        Map<Long, Step> cameFrom = new HashMap<>();
+        Deque<Long> queue = new ArrayDeque<>();
+        queue.add(fromId);
+        cameFrom.put(fromId, new Step(null, null));
+
+        while (!queue.isEmpty()) {
+            Long curId = queue.poll();
+            if (curId.equals(toId)) break;
+            Person cur = byId.get(curId);
+            if (cur == null) continue;
+
+            // up: parents
+            addNeighbor(cur.getFather(), Edge.FATHER, curId, cameFrom, queue);
+            addNeighbor(cur.getMother(), Edge.MOTHER, curId, cameFrom, queue);
+            // down: children
+            for (Person child : findChildren(curId, byId.values())) {
+                addNeighborId(child.getId(), Edge.CHILD, curId, cameFrom, queue);
+            }
+            // sideways: spouses
+            for (Long sp : spouses.getOrDefault(curId, Set.of())) {
+                addNeighborId(sp, Edge.SPOUSE, curId, cameFrom, queue);
             }
         }
 
-        if (bestAncestor == null) {
-            return new RelationshipResult("No blood relation found",
-                    "No common ancestor was found in the recorded tree. "
-                            + "They may be related by marriage or the link isn't recorded yet.");
+        if (!cameFrom.containsKey(toId)) {
+            return new RelationshipResult("Not connected",
+                    "No connection found in the recorded tree yet. Add the missing parent or marriage links to connect them.",
+                    List.of());
         }
 
-        String label = cousinLabel(bestFrom, bestTo, to.getGender());
-        return new RelationshipResult(label,
-                from.getFirstName() + " and " + to.getFirstName()
-                        + " share a common ancestor.");
+        // reconstruct edge path from->to
+        List<Edge> edges = new ArrayList<>();
+        List<Long> nodes = new ArrayList<>();
+        Long cur = toId;
+        while (cur != null && !cur.equals(fromId)) {
+            Step st = cameFrom.get(cur);
+            edges.add(st.viaEdge());
+            nodes.add(cur);
+            cur = st.personId();
+        }
+        Collections.reverse(edges);
+        Collections.reverse(nodes);
+
+        String label = deriveLabel(edges, to.getGender());
+        List<String> pathNames = new ArrayList<>();
+        pathNames.add(displayName(from));
+        for (Long id : nodes) pathNames.add(displayName(byId.get(id)));
+
+        String detail = pathNames.size() <= 2
+                ? displayName(to) + " is the " + label.toLowerCase() + " of " + from.getFirstName() + "."
+                : "Connected through: " + String.join(" → ", pathNames);
+
+        return new RelationshipResult(label, detail, pathNames);
     }
 
-    /** Map of ancestorId -> generations above the person (1 = parent). Includes nothing for self. */
-    private Map<Long, Integer> ancestors(Person p) {
-        Map<Long, Integer> result = new HashMap<>();
-        Deque<Map.Entry<Person, Integer>> queue = new ArrayDeque<>();
-        if (p.getFather() != null) queue.add(Map.entry(p.getFather(), 1));
-        if (p.getMother() != null) queue.add(Map.entry(p.getMother(), 1));
-        while (!queue.isEmpty()) {
-            var cur = queue.poll();
-            Person person = cur.getKey();
-            int dist = cur.getValue();
-            // keep the smallest distance if reached multiple ways
-            result.merge(person.getId(), dist, Math::min);
-            if (person.getFather() != null)
-                queue.add(Map.entry(person.getFather(), dist + 1));
-            if (person.getMother() != null)
-                queue.add(Map.entry(person.getMother(), dist + 1));
-        }
-        return result;
+    private void addNeighbor(Person p, Edge e, Long fromNode,
+                             Map<Long, Step> cameFrom, Deque<Long> queue) {
+        if (p != null) addNeighborId(p.getId(), e, fromNode, cameFrom, queue);
     }
 
-    private String ancestorLabel(int d, Person.Gender g) {
-        return switch (d) {
-            case 1 -> g == Person.Gender.FEMALE ? "Mother" : g == Person.Gender.MALE ? "Father" : "Parent";
-            case 2 -> g == Person.Gender.FEMALE ? "Grandmother" : g == Person.Gender.MALE ? "Grandfather" : "Grandparent";
-            case 3 -> "Great-grandparent";
-            default -> (d - 2) + "x great-grandparent";
-        };
+    private void addNeighborId(Long id, Edge e, Long fromNode,
+                               Map<Long, Step> cameFrom, Deque<Long> queue) {
+        if (id != null && !cameFrom.containsKey(id)) {
+            cameFrom.put(id, new Step(fromNode, e));
+            queue.add(id);
+        }
     }
 
-    private String descendantLabel(int d, Person.Gender g) {
-        return switch (d) {
-            case 1 -> g == Person.Gender.FEMALE ? "Daughter" : g == Person.Gender.MALE ? "Son" : "Child";
-            case 2 -> g == Person.Gender.FEMALE ? "Granddaughter" : g == Person.Gender.MALE ? "Grandson" : "Grandchild";
-            case 3 -> "Great-grandchild";
-            default -> (d - 2) + "x great-grandchild";
-        };
+    private List<Person> findChildren(Long parentId, Collection<Person> all) {
+        List<Person> kids = new ArrayList<>();
+        for (Person p : all) {
+            if ((p.getFather() != null && p.getFather().getId().equals(parentId)) ||
+                (p.getMother() != null && p.getMother().getId().equals(parentId))) {
+                kids.add(p);
+            }
+        }
+        return kids;
     }
 
-    private String cousinLabel(int dFrom, int dTo, Person.Gender g) {
-        // Siblings: both one step from common ancestor
-        if (dFrom == 1 && dTo == 1) {
-            return g == Person.Gender.FEMALE ? "Sister" : g == Person.Gender.MALE ? "Brother" : "Sibling";
+    /**
+     * Translate the edge sequence into a relationship word.
+     * Handles direct lines, siblings, aunts/uncles, cousins, grandparents,
+     * and marriage-based in-law relations.
+     */
+    private String deriveLabel(List<Edge> edges, Person.Gender g) {
+        // Count consecutive UP (parent) then DOWN (child) with optional spouse hops.
+        boolean male = g == Person.Gender.MALE;
+        boolean female = g == Person.Gender.FEMALE;
+
+        // Pure spouse
+        if (edges.size() == 1 && edges.get(0) == Edge.SPOUSE) {
+            return female ? "Wife" : male ? "Husband" : "Spouse";
         }
-        // Aunt/Uncle or Niece/Nephew: one is a direct child, other is deeper
-        if (dFrom == 1) {
-            // 'to' is dTo steps down from ancestor, 'from' is sibling-level
-            return g == Person.Gender.FEMALE ? "Niece" : g == Person.Gender.MALE ? "Nephew" : "Niece/Nephew";
+
+        long ups = edges.stream().filter(e -> e == Edge.FATHER || e == Edge.MOTHER).count();
+        long downs = edges.stream().filter(e -> e == Edge.CHILD).count();
+        long spousesHops = edges.stream().filter(e -> e == Edge.SPOUSE).count();
+
+        // Detect a trailing or leading spouse hop => in-law
+        boolean inLaw = spousesHops > 0;
+
+        // Pure ancestor (all ups)
+        if (downs == 0 && spousesHops == 0) {
+            return switch ((int) ups) {
+                case 1 -> female ? "Mother" : male ? "Father" : "Parent";
+                case 2 -> female ? "Grandmother" : male ? "Grandfather" : "Grandparent";
+                case 3 -> "Great-grandparent";
+                default -> (ups - 2) + "x great-grandparent";
+            };
         }
-        if (dTo == 1) {
-            return g == Person.Gender.FEMALE ? "Aunt" : g == Person.Gender.MALE ? "Uncle" : "Aunt/Uncle";
+        // Pure descendant (all downs)
+        if (ups == 0 && spousesHops == 0) {
+            return switch ((int) downs) {
+                case 1 -> female ? "Daughter" : male ? "Son" : "Child";
+                case 2 -> female ? "Granddaughter" : male ? "Grandson" : "Grandchild";
+                case 3 -> "Great-grandchild";
+                default -> (downs - 2) + "x great-grandchild";
+            };
         }
-        // Cousins: degree = min - 1, removed = |dFrom - dTo|
-        int degree = Math.min(dFrom, dTo) - 1;
-        int removed = Math.abs(dFrom - dTo);
-        String base = ordinal(degree) + " cousin";
-        if (removed > 0) base += " " + removed + "x removed";
-        return base;
+
+        // Sibling: up to a parent then down to a child (ups==1, downs==1)
+        if (ups == 1 && downs == 1 && spousesHops == 0) {
+            return female ? "Sister" : male ? "Brother" : "Sibling";
+        }
+        // Sibling-in-law: sibling + spouse, or spouse + sibling
+        if (ups == 1 && downs == 1 && spousesHops == 1) {
+            return female ? "Sister-in-law" : male ? "Brother-in-law" : "Sibling-in-law";
+        }
+        // Aunt/Uncle: up 2, down 1
+        if (ups == 2 && downs == 1 && spousesHops == 0) {
+            return female ? "Aunt" : male ? "Uncle" : "Aunt/Uncle";
+        }
+        if (ups == 2 && downs == 1 && spousesHops == 1) {
+            return female ? "Aunt (by marriage)" : male ? "Uncle (by marriage)" : "Aunt/Uncle (by marriage)";
+        }
+        // Niece/Nephew: up 1, down 2
+        if (ups == 1 && downs == 2 && spousesHops == 0) {
+            return female ? "Niece" : male ? "Nephew" : "Niece/Nephew";
+        }
+        // Parent-in-law: spouse then up
+        if (ups == 1 && downs == 0 && spousesHops == 1) {
+            return female ? "Mother-in-law" : male ? "Father-in-law" : "Parent-in-law";
+        }
+        // Child-in-law: down then spouse
+        if (ups == 0 && downs == 1 && spousesHops == 1) {
+            return female ? "Daughter-in-law" : male ? "Son-in-law" : "Child-in-law";
+        }
+        // Cousins: up N, down M, both >=2
+        if (ups >= 2 && downs >= 2 && spousesHops == 0) {
+            int degree = (int) Math.min(ups, downs) - 1;
+            int removed = (int) Math.abs(ups - downs);
+            String base = ordinal(degree) + " cousin";
+            if (removed > 0) base += " " + removed + "x removed";
+            return base;
+        }
+
+        // Fallback for anything with marriage hops
+        if (inLaw) return "Related by marriage";
+        return "Relative";
     }
 
     private String ordinal(int n) {
@@ -147,8 +221,8 @@ public class RelationshipFinderService {
         };
     }
 
-    private String descLine(Person from, Person to, int upFrom, int downTo) {
-        return to.getFirstName() + " is the " +
-                (upFrom > 0 ? "ancestor" : "descendant") + " of " + from.getFirstName() + ".";
+    private String displayName(Person p) {
+        if (p == null) return "?";
+        return p.getFirstName() + (p.getLastName() != null ? " " + p.getLastName() : "");
     }
 }

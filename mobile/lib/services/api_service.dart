@@ -119,4 +119,40 @@ class ApiService {
       throw Exception('Failed to delete relationship');
     }
   }
+
+  // ---- Insights ----
+
+  Future<Map<String, dynamic>> findRelationship(int fromId, int toId) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/insights/relationship?from=$fromId&to=$toId'),
+      headers: _headers,
+    );
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to find relationship');
+  }
+
+  Future<List<Map<String, dynamic>>> getBirthdays() async {
+    final res = await http.get(
+        Uri.parse('$baseUrl/insights/birthdays'), headers: _headers);
+    if (res.statusCode == 200) {
+      final List data = jsonDecode(res.body);
+      return data.cast<Map<String, dynamic>>();
+    }
+    throw Exception('Failed to load birthdays');
+  }
+
+  Future<List<Person>> search({String q = '', String? gender}) async {
+    final params = <String, String>{'q': q};
+    if (gender != null && gender.isNotEmpty) params['gender'] = gender;
+    final uri = Uri.parse('$baseUrl/insights/search')
+        .replace(queryParameters: params);
+    final res = await http.get(uri, headers: _headers);
+    if (res.statusCode == 200) {
+      final List data = jsonDecode(res.body);
+      return data.map((e) => Person.fromJson(e)).toList();
+    }
+    throw Exception('Search failed');
+  }
 }

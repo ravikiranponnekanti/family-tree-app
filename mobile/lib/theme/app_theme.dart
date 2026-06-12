@@ -1,101 +1,126 @@
 import 'package:flutter/material.dart';
 
-/// Central design system for the app. Warm, modern, rounded.
+/// Premium dark design system.
 class AppTheme {
-  // Core palette
-  static const Color primary = Color(0xFF1B6B5C); // deep teal-green
-  static const Color primaryDark = Color(0xFF0F4A3E);
-  static const Color accent = Color(0xFFE8A87C); // warm sand/peach
-  static const Color bg = Color(0xFFF7F4EF); // warm off-white
-  static const Color card = Colors.white;
-  static const Color textDark = Color(0xFF2B2B2B);
-  static const Color textMuted = Color(0xFF7A7A7A);
+  // Core dark palette
+  static const Color bg = Color(0xFF0E1417); // near-black charcoal
+  static const Color surface = Color(0xFF182026); // card surface
+  static const Color surfaceHi = Color(0xFF202A31); // elevated surface
+  static const Color primary = Color(0xFF2DD4BF); // bright teal
+  static const Color primaryDim = Color(0xFF14756B);
+  static const Color gold = Color(0xFFE8B765); // warm gold accent
+  static const Color textLight = Color(0xFFF1F5F4);
+  static const Color textMuted = Color(0xFF8A9AA0);
 
-  // Soft gender tints for cards/nodes
-  static const Color maleTint = Color(0xFFDCE9F5);
-  static const Color femaleTint = Color(0xFFF8E0E6);
-  static const Color neutralTint = Color(0xFFEDEAE3);
+  // Gender accent tints (used for rings/borders)
+  static const Color maleAccent = Color(0xFF5AA9E6);
+  static const Color femaleAccent = Color(0xFFE6789B);
+  static const Color neutralAccent = Color(0xFF9C8FE0);
 
   static Color genderColor(String? gender) {
     switch (gender) {
       case 'MALE':
-        return maleTint;
+        return maleAccent;
       case 'FEMALE':
-        return femaleTint;
+        return femaleAccent;
       default:
-        return neutralTint;
+        return neutralAccent;
     }
   }
 
   static ThemeData theme() {
-    final base = ThemeData(useMaterial3: true);
+    final base = ThemeData(useMaterial3: true, brightness: Brightness.dark);
     return base.copyWith(
       scaffoldBackgroundColor: bg,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primary,
+        brightness: Brightness.dark,
         primary: primary,
-        secondary: accent,
-        surface: card,
+        secondary: gold,
+        surface: surface,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: primary,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        foregroundColor: textLight,
         elevation: 0,
         centerTitle: true,
         titleTextStyle: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
+            fontSize: 20, fontWeight: FontWeight.w600, color: textLight),
       ),
       cardTheme: CardThemeData(
-        color: card,
-        elevation: 2,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        color: surface,
+        elevation: 0,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: Colors.white,
+          foregroundColor: const Color(0xFF06201D),
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: surfaceHi,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: const TextStyle(color: textMuted),
+        labelStyle: const TextStyle(color: textMuted),
+        prefixIconColor: textMuted,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: primary, width: 2),
         ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: primary,
-        foregroundColor: Colors.white,
+        foregroundColor: Color(0xFF06201D),
       ),
+      dialogTheme: const DialogThemeData(backgroundColor: surfaceHi),
+      popupMenuTheme: const PopupMenuThemeData(color: surfaceHi),
     );
   }
 
-  // Reusable gradient for headers/hero areas
+  // Premium gradients
   static const LinearGradient heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primary, primaryDark],
+    colors: [Color(0xFF14756B), Color(0xFF0E1417)],
   );
+
+  static const LinearGradient tealGold = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [primary, gold],
+  );
+
+  static List<BoxShadow> get cardShadow => [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.4),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+        ),
+      ];
+
+  // Backward-compatible aliases (older screens reference these names)
+  static const Color card = surface;
+  static const Color textDark = textLight;
+  static const Color accent = gold;
+  static const Color primaryDark = primaryDim;
+  static const Color maleTint = maleAccent;
+  static const Color femaleTint = femaleAccent;
+  static const Color neutralTint = neutralAccent;
 }

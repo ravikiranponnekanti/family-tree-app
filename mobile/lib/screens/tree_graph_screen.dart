@@ -238,13 +238,13 @@ class _NodeCard extends StatelessWidget {
         height: height,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppTheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
               color: AppTheme.genderColor(person.gender), width: 3),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
+                color: Colors.black.withValues(alpha: 0.4),
                 blurRadius: 6,
                 offset: const Offset(0, 2)),
           ],
