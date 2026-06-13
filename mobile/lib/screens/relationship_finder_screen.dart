@@ -215,14 +215,14 @@ class _RelationshipFinderScreenState extends State<RelationshipFinderScreen> {
             const SizedBox(height: 6),
             Text('${_to!.firstName} is the ${_resultLabel?.toLowerCase()}',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.textMuted)),
+                style: const TextStyle(color: Colors.white70)),
           ],
           if (_resultDetail != null) ...[
             const SizedBox(height: 12),
             Text(_resultDetail!,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    color: AppTheme.textLight, fontSize: 13)),
+                    color: Colors.white70, fontSize: 13)),
           ],
         ],
       ),

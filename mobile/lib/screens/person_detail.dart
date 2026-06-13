@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/person_avatar.dart';
 import 'person_form.dart';
+import 'tree_graph_screen.dart';
 
 class PersonDetail extends StatefulWidget {
   final int personId;
@@ -174,6 +175,15 @@ class _PersonDetailState extends State<PersonDetail> {
       expandedHeight: 240,
       pinned: true,
       actions: [
+        IconButton(
+          tooltip: 'Show my family in tree',
+          icon: const Icon(Icons.account_tree),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => TreeGraphScreen(highlightId: p.id)),
+          ),
+        ),
         IconButton(icon: const Icon(Icons.delete_outline), onPressed: _delete),
       ],
       flexibleSpace: FlexibleSpaceBar(

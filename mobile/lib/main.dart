@@ -8,6 +8,7 @@ import 'screens/login_screen.dart';
 import 'screens/tree_graph_screen.dart';
 import 'screens/relationship_finder_screen.dart';
 import 'screens/birthdays_screen.dart';
+import 'services/pdf_export_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/person_avatar.dart';
 
@@ -25,7 +26,7 @@ class _FamilyTreeAppState extends State<FamilyTreeApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Family Tree',
+      title: 'Jumbo Family',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme(),
       home: _loggedIn
@@ -73,6 +74,21 @@ class _HomeScreenState extends State<HomeScreen> {
       transitionsBuilder: (_, a, __, child) =>
           FadeTransition(opacity: a, child: child),
     );
+  }
+
+  Future<void> _exportPdf() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final people = await _api.getPersons();
+      if (people.isEmpty) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('No members to export yet.')));
+        return;
+      }
+      await PdfExportService.exportDirectory(people);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
   }
 
   void _confirmLogout() {
@@ -182,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 10),
                   const Expanded(
-                    child: Text('My Family',
+                    child: Text('Jumbo Family',
                         style: TextStyle(
                             color: AppTheme.textLight,
                             fontSize: 24,
@@ -201,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onSelected: (v) {
                       if (v == 'logout') _confirmLogout();
                       if (v == 'refresh') _refresh();
+                      if (v == 'pdf') _exportPdf();
                     },
                     itemBuilder: (_) => const [
                       PopupMenuItem(
@@ -208,6 +225,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: ListTile(
                               leading: Icon(Icons.refresh),
                               title: Text('Refresh'))),
+                      PopupMenuItem(
+                          value: 'pdf',
+                          child: ListTile(
+                              leading: Icon(Icons.picture_as_pdf),
+                              title: Text('Export PDF'))),
                       PopupMenuItem(
                           value: 'logout',
                           child: ListTile(
@@ -231,10 +253,13 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
               TextField(
                 onChanged: (v) => setState(() => _search = v.toLowerCase()),
-                style: const TextStyle(color: AppTheme.textLight),
-                decoration: const InputDecoration(
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
                   hintText: 'Search family...',
-                  prefixIcon: Icon(Icons.search),
+                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                  prefixIcon:
+                      const Icon(Icons.search, color: Colors.white70),
+                  fillColor: Colors.white.withValues(alpha: 0.12),
                 ),
               ),
             ],

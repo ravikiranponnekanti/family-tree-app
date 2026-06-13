@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         size: 56, color: Colors.white),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Family Tree',
+                  const Text('Jumbo Family',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 28,
