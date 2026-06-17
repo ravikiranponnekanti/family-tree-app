@@ -105,6 +105,24 @@ class _Node {
   _Node(this.person);
 }
 
+/// Shifts a node and all its descendants horizontally by [dx].
+/// Used to keep a child's own children moving with them when re-centering.
+void _shiftSubtree(_Node node, double dx, Map<int, _Node> nodes,
+    Map<int, List<int>> spousesOf,
+    [Set<int>? visited]) {
+  visited ??= {};
+  if (visited.contains(node.person.id)) return;
+  visited.add(node.person.id!);
+  node.x += dx;
+  // shift children of this node
+  for (final other in nodes.values) {
+    final f = other.person.fatherId, m = other.person.motherId;
+    if (f == node.person.id || m == node.person.id) {
+      _shiftSubtree(other, dx, nodes, spousesOf, visited);
+    }
+  }
+}
+
 class _TreeView extends StatelessWidget {
   final List<Person> persons;
   final List<Relationship> relationships;
@@ -150,12 +168,17 @@ class _TreeView extends StatelessWidget {
       nodes[p.id!] = _Node(p);
     }
 
-    // ---- spouse map (who is married to whom) ----
-    final spouseOf = <int, int>{};
+    // ---- spouse map: a person can have MULTIPLE spouses ----
+    final spousesOf = <int, List<int>>{};
     for (final r in relationships) {
-      // first spouse link wins for layout pairing
-      spouseOf.putIfAbsent(r.personAId, () => r.personBId);
-      spouseOf.putIfAbsent(r.personBId, () => r.personAId);
+      spousesOf.putIfAbsent(r.personAId, () => []);
+      spousesOf.putIfAbsent(r.personBId, () => []);
+      if (!spousesOf[r.personAId]!.contains(r.personBId)) {
+        spousesOf[r.personAId]!.add(r.personBId);
+      }
+      if (!spousesOf[r.personBId]!.contains(r.personAId)) {
+        spousesOf[r.personBId]!.add(r.personAId);
+      }
     }
 
     // 1) assign depth = longest ancestor chain
@@ -180,13 +203,16 @@ class _TreeView extends StatelessWidget {
     }
 
     // Align spouses to the same (deeper) depth so couples sit on one row
-    for (final entry in spouseOf.entries) {
+    for (final entry in spousesOf.entries) {
       final a = nodes[entry.key];
-      final b = nodes[entry.value];
-      if (a != null && b != null) {
-        final d = a.depth > b.depth ? a.depth : b.depth;
-        a.depth = d;
-        b.depth = d;
+      if (a == null) continue;
+      for (final spId in entry.value) {
+        final b = nodes[spId];
+        if (b != null) {
+          final d = a.depth > b.depth ? a.depth : b.depth;
+          a.depth = d;
+          b.depth = d;
+        }
       }
     }
 
@@ -205,78 +231,200 @@ class _TreeView extends StatelessWidget {
       }
     }
 
-    // 2) couple-aware tidy layout.
-    // A "unit" is either a single person or a married couple. We place units
-    // left-to-right; a couple occupies two node slots side by side and its
-    // children hang from the midpoint between the two spouses.
+    // 2) family-cluster tidy layout.
+    // - Single person: one slot.
+    // - Simple couple (each has only the other as spouse): side by side,
+    //   children hang from the midpoint between them.
+    // - Multi-spouse person (e.g. a husband with 2 wives): the central person
+    //   sits in the MIDDLE with spouses arranged on each side; each spouse's
+    //   children hang under that spouse.
     double nextLeaf = 0;
     final positioned = <int>{};
 
-    // returns the center x of the placed unit
-    double placeUnit(_Node n) {
-      if (positioned.contains(n.person.id)) return n.x;
-
-      final spouseId = spouseOf[n.person.id];
-      final spouse = spouseId != null ? nodes[spouseId] : null;
-      final hasSpouse = spouse != null && !positioned.contains(spouseId);
-
-      // gather children of this couple/person
-      final kidSet = <int, _Node>{};
-      for (final k in (childrenOf[n.person.id] ?? [])) {
-        kidSet[k.person.id!] = k;
+    // helper: children whose parents are exactly {parentA, parentB}
+    List<_Node> kidsOfPair(int a, int b) {
+      final out = <_Node>[];
+      for (final n in nodes.values) {
+        final f = n.person.fatherId, m = n.person.motherId;
+        final pair = {if (f != null) f, if (m != null) m};
+        if (pair.contains(a) && pair.contains(b)) out.add(n);
       }
-      if (spouse != null) {
-        for (final k in (childrenOf[spouseId] ?? [])) {
-          kidSet[k.person.id!] = k;
+      out.sort((x, y) => x.person.id!.compareTo(y.person.id!));
+      return out;
+    }
+
+    // place a leaf single person
+    double placeSinglePerson(_Node n) {
+      n.x = nextLeaf;
+      nextLeaf += nodeW + hGap;
+      return n.x;
+    }
+
+    // forward declaration via local function variable
+    late double Function(_Node) placeUnit;
+
+    // place all children of a given parent-pair, return their center x
+    double? placeKidsOfPair(int a, int b) {
+      final kids = kidsOfPair(a, b);
+      if (kids.isEmpty) return null;
+      final centers = <double>[];
+      for (final k in kids) {
+        if (!positioned.contains(k.person.id)) {
+          centers.add(placeUnit(k));
+        } else {
+          centers.add(k.x + nodeW / 2);
         }
       }
-      final kids = kidSet.values.toList()
-        ..sort((a, b) => a.person.id!.compareTo(b.person.id!));
+      return (centers.reduce((a, b) => a < b ? a : b) +
+              centers.reduce((a, b) => a > b ? a : b)) /
+          2;
+    }
 
-      positioned.add(n.person.id!);
-      if (hasSpouse) positioned.add(spouseId!);
+    placeUnit = (n) {
+      if (positioned.contains(n.person.id)) return n.x + nodeW / 2;
 
-      if (kids.isEmpty) {
-        // place couple/person at the current leaf position
-        if (hasSpouse) {
+      final spouses = (spousesOf[n.person.id] ?? [])
+          .where((s) => nodes.containsKey(s) && !positioned.contains(s))
+          .toList();
+
+      // full spouse list (regardless of placement) — used to detect that
+      // this person is a multi-spouse center even if a spouse slipped through
+      final allSpouses = (spousesOf[n.person.id] ?? [])
+          .where((s) => nodes.containsKey(s))
+          .toList();
+
+      // If this person's spouse is themselves a multi-spouse center
+      // (e.g. we reached a wife before the husband who has 2 wives),
+      // delegate to placing that center's full cluster first, so the
+      // husband never collapses onto one wife's position.
+      if (spouses.length == 1) {
+        final spId = spouses.first;
+        final spousePartners = (spousesOf[spId] ?? [])
+            .where((s) => nodes.containsKey(s))
+            .toList();
+        if (spousePartners.length >= 2 && !positioned.contains(spId)) {
+          placeUnit(nodes[spId]!); // place the husband's whole cluster
+          return n.x + nodeW / 2;  // this person was positioned in that cluster
+        }
+      }
+
+      // ----- MULTI-SPOUSE CLUSTER (central person with 2+ spouses) -----
+      if (allSpouses.length >= 2) {
+        positioned.add(n.person.id!);
+        // arrange: [spouse0] [center] [spouse1] [spouse2...]
+        // We'll place left spouse, then center, then right spouses,
+        // each spouse's children under that spouse.
+        final leftSpouse = nodes[allSpouses.first]!;
+        final rightSpouses =
+            allSpouses.skip(1).map((s) => nodes[s]!).toList();
+
+        // place left spouse's children, then left spouse over them
+        positioned.add(leftSpouse.person.id!);
+        final leftKidMid =
+            placeKidsOfPair(n.person.id!, leftSpouse.person.id!);
+        if (leftKidMid != null) {
+          leftSpouse.x = leftKidMid - nodeW / 2;
+        } else {
+          leftSpouse.x = nextLeaf;
+          nextLeaf += nodeW + hGap;
+        }
+
+        // center person goes right after left spouse
+        n.x = leftSpouse.x + nodeW + coupleGap;
+        if (n.x < nextLeaf) n.x = nextLeaf;
+        nextLeaf = n.x + nodeW + coupleGap;
+
+        // right spouses + their kids
+        for (final rs in rightSpouses) {
+          positioned.add(rs.person.id!);
+          final startLeaf = nextLeaf;
+          final rsKidMid = placeKidsOfPair(n.person.id!, rs.person.id!);
+          if (rsKidMid != null) {
+            rs.x = rsKidMid - nodeW / 2;
+            if (rs.x < n.x + nodeW + coupleGap) {
+              rs.x = n.x + nodeW + coupleGap;
+            }
+          } else {
+            rs.x = startLeaf;
+          }
+          nextLeaf = rs.x + nodeW + hGap;
+        }
+
+        // Re-center each spouse's children under the midpoint between the
+        // central person and that spouse, so a single child sits BETWEEN
+        // their mother and father (not off to one side).
+        void recenterKids(_Node spouseNode) {
+          final kids = kidsOfPair(n.person.id!, spouseNode.person.id!);
+          if (kids.isEmpty) return;
+          final parentMid =
+              ((n.x + nodeW / 2) + (spouseNode.x + nodeW / 2)) / 2;
+          // current center of the kids
+          final curCenters =
+              kids.map((k) => k.x + nodeW / 2).toList();
+          final curMid = (curCenters.reduce((a, b) => a < b ? a : b) +
+                  curCenters.reduce((a, b) => a > b ? a : b)) /
+              2;
+          final shift = parentMid - curMid;
+          for (final k in kids) {
+            _shiftSubtree(k, shift, nodes, spousesOf);
+          }
+        }
+
+        recenterKids(leftSpouse);
+        for (final rs in rightSpouses) {
+          recenterKids(rs);
+        }
+        return n.x + nodeW / 2;
+      }
+
+      // ----- SIMPLE COUPLE (one spouse) -----
+      if (spouses.length == 1) {
+        final spouse = nodes[spouses.first]!;
+        positioned.add(n.person.id!);
+        positioned.add(spouse.person.id!);
+        final kidMid = placeKidsOfPair(n.person.id!, spouse.person.id!);
+        if (kidMid != null) {
+          // husband-left, wife-right around children's midpoint
+          n.x = kidMid - nodeW - coupleGap / 2;
+          spouse.x = kidMid + coupleGap / 2;
+          return kidMid;
+        } else {
           n.x = nextLeaf;
           spouse.x = nextLeaf + nodeW + coupleGap;
           nextLeaf += 2 * nodeW + coupleGap + hGap;
-          return (n.x + spouse.x) / 2;
-        } else {
-          n.x = nextLeaf;
-          nextLeaf += nodeW + hGap;
-          return n.x;
-        }
-      } else {
-        // place children first
-        final kidCenters = <double>[];
-        for (final k in kids) {
-          kidCenters.add(placeUnit(k));
-        }
-        final childMid = (kidCenters.reduce((a, b) => a < b ? a : b) +
-                kidCenters.reduce((a, b) => a > b ? a : b)) /
-            2;
-        // center the couple over their children's midpoint
-        if (hasSpouse) {
-          // symmetric around childMid: spouse A on left, spouse B on right
-          n.x = childMid - nodeW - coupleGap / 2;
-          spouse.x = childMid + coupleGap / 2;
-          return childMid;
-        } else {
-          n.x = childMid - nodeW / 2;
-          return childMid;
+          return (n.x + spouse.x) / 2 + nodeW / 2;
         }
       }
-    }
 
-    // Place starting from top-most generation (roots), couples first.
+      // ----- SINGLE PERSON (no spouse): place over own children if any -----
+      positioned.add(n.person.id!);
+      final ownKids = childrenOf[n.person.id] ?? [];
+      if (ownKids.isEmpty) {
+        return placeSinglePerson(n) + nodeW / 2;
+      } else {
+        final centers = <double>[];
+        for (final k in ownKids) {
+          if (!positioned.contains(k.person.id)) {
+            centers.add(placeUnit(k));
+          } else {
+            centers.add(k.x + nodeW / 2);
+          }
+        }
+        final mid = (centers.reduce((a, b) => a < b ? a : b) +
+                centers.reduce((a, b) => a > b ? a : b)) /
+            2;
+        n.x = mid - nodeW / 2;
+        return mid;
+      }
+    };
+
+    // Place starting from top-most generation (roots).
     final roots = nodes.values.where((n) => n.depth == 0).toList()
       ..sort((a, b) => a.person.id!.compareTo(b.person.id!));
     for (final r in roots) {
       placeUnit(r);
     }
-    // place anything left (people whose parents weren't roots, orphans)
+    // place anything left (orphans / deeper unplaced)
     final remaining = nodes.values.toList()
       ..sort((a, b) => a.depth.compareTo(b.depth));
     for (final n in remaining) {

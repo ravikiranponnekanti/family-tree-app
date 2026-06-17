@@ -56,8 +56,15 @@ class _PersonDetailState extends State<PersonDetail> {
       ),
     );
     if (confirm == true) {
-      await _api.deletePerson(widget.personId);
-      if (mounted) Navigator.pop(context);
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      try {
+        await _api.deletePerson(widget.personId);
+        if (mounted) navigator.pop(true);
+      } catch (e) {
+        messenger.showSnackBar(
+            SnackBar(content: Text("Couldn't delete: $e")));
+      }
     }
   }
 
@@ -143,8 +150,50 @@ class _PersonDetailState extends State<PersonDetail> {
       body: FutureBuilder<Person>(
         future: _personFuture,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+                child: CircularProgressIndicator(color: AppTheme.primary));
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 56, color: AppTheme.textMuted),
+                    const SizedBox(height: 16),
+                    const Text("Couldn't load this person.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: AppTheme.textLight,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Text('${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: AppTheme.textMuted, fontSize: 12)),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Go back'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+                child: CircularProgressIndicator(color: AppTheme.primary));
           }
           final p = snapshot.data!;
           return CustomScrollView(

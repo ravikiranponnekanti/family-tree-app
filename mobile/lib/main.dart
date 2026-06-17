@@ -323,8 +323,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (context, i) {
                   final p = recent[i];
                   return GestureDetector(
-                    onTap: () => Navigator.push(context,
-                        _fadeRoute(PersonDetail(personId: p.id!))),
+                    onTap: () async {
+                      await Navigator.push(context,
+                          _fadeRoute(PersonDetail(personId: p.id!)));
+                      _refresh();
+                    },
                     child: SizedBox(
                       width: 64,
                       child: Column(
@@ -434,8 +437,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _profileCard(Person p) {
     final accent = AppTheme.genderColor(p.gender);
     return GestureDetector(
-      onTap: () => Navigator.push(
-          context, _fadeRoute(PersonDetail(personId: p.id!))),
+      onTap: () async {
+        await Navigator.push(
+            context, _fadeRoute(PersonDetail(personId: p.id!)));
+        _refresh();
+      },
       child: Container(
         decoration: BoxDecoration(
           color: AppTheme.surface,

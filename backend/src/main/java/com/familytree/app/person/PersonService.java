@@ -81,12 +81,15 @@ public class PersonService {
             }
             repository.save(child);
         }
+        // ensure the detach updates hit the DB before we delete
+        repository.flush();
 
         // 2) Remove any spouse/partner relationships involving this person.
         List<Relationship> rels =
                 relationshipRepository.findByPersonAIdOrPersonBId(id, id);
         if (!rels.isEmpty()) {
             relationshipRepository.deleteAll(rels);
+            relationshipRepository.flush();
         }
 
         // 3) Now it's safe to delete the person.
