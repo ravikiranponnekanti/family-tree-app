@@ -14,7 +14,7 @@ import 'package:http/http.dart' as http;
 class StorageService {
   // TODO: fill these in from your Supabase dashboard.
   static const String supabaseUrl = 'https://YOUR_PROJECT.supabase.co';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtqd3FwdXR1cGh1aW5idWJ5dXlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NDgyNDQsImV4cCI6MjA5NjMyNDI0NH0.i-awYpW7Ig_hs2FHU0W_WyAOxFpeHNolmQluPmbeMIc';
   static const String bucket = 'family-photos';
 
   bool get isConfigured =>

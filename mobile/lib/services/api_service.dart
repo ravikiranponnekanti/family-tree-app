@@ -9,7 +9,7 @@ class ApiService {
   //  - iOS simulator / web: use http://localhost:8080
   //  - Physical device: use your computer's LAN IP, e.g. http://192.168.1.20:8080
   //  - Deployed backend: use your Render/Railway URL, e.g. https://family-tree.onrender.com
-  static const String baseUrl = 'http://10.0.2.2:8080/api';
+  static const String baseUrl = 'https://family-tree-backend-3g9h.onrender.com/api';
 
   // Set after login/register; attached to every authenticated request.
   static String? authToken;

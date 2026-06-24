@@ -32,5 +32,9 @@ public class Relationship {
 
     private LocalDate endDate;
 
-    public enum RelationType { MARRIED, PARTNER, DIVORCED, ENGAGED }
+    public enum RelationType {
+        MARRIED, PARTNER, DIVORCED, ENGAGED,
+        SIBLING, BROTHER, SISTER,
+        FRIEND, COUSIN, OTHER
+    }
 }

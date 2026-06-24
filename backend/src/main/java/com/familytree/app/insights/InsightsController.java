@@ -15,6 +15,7 @@ public class InsightsController {
 
     private final RelationshipFinderService relationshipFinder;
     private final BirthdayService birthdayService;
+    private final AnniversaryService anniversaryService;
     private final PersonRepository personRepository;
 
     @GetMapping("/relationship")
@@ -26,6 +27,11 @@ public class InsightsController {
     @GetMapping("/birthdays")
     public List<BirthdayService.BirthdayItem> birthdays() {
         return birthdayService.upcomingThisMonth();
+    }
+
+    @GetMapping("/anniversaries")
+    public List<AnniversaryService.AnniversaryItem> anniversaries() {
+        return anniversaryService.upcomingThisMonth();
     }
 
     @GetMapping("/search")
